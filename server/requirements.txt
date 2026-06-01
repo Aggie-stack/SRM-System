@@ -1,0 +1,11 @@
+Flask
+Flask-RESTful
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-CORS
+Flask-SocketIO
+PyJWT
+bcrypt
+python-dateutil
+psycopg2-binary
+gunicorn
