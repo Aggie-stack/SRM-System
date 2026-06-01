@@ -137,6 +137,9 @@ def init_db():
         print("Seeded default users")
     else:
         print("Users already exist")
+        
+with app.app_context():
+    init_db()
 
 
 @app.after_request
@@ -477,8 +480,6 @@ def renewals_due():
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    with app.app_context():
-        init_db()
 
     socketio.run(
         app,
