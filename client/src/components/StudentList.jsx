@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import API from "../api";
 import axios from "axios";
 
@@ -30,58 +31,52 @@ function StudentListSkeleton() {
 }
 
 function StudentList({ refresh, triggerRefresh }) {
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [search, setSearch]                   = useState("");
+  const [statusFilter, setStatusFilter]       = useState("All");
   const [membershipFilter, setMembershipFilter] = useState("All");
-  const [modeFilter, setModeFilter] = useState("All");
-  const [levelFilter, setLevelFilter] = useState("All");
+  const [modeFilter, setModeFilter]           = useState("All");
+  const [levelFilter, setLevelFilter]         = useState("All");
 
-  const [editStudent, setEditStudent] = useState(null);
-  const [editStep, setEditStep] = useState(1);
-
-  const [paymentData, setPaymentData] = useState({
-    id: null,
-    amount: "",
-    date_paid: "",
-    duration: "",
+  const [editStudent, setEditStudent]         = useState(null);
+  const [editStep, setEditStep]               = useState(1);
+  const [paymentData, setPaymentData]         = useState({
+    id: null, amount: "", date_paid: "", duration: "",
   });
 
-  const [deleteStudent, setDeleteStudent] = useState(null);
+  const [deleteStudent, setDeleteStudent]     = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [paymentHistory, setPaymentHistory] = useState([]);
-  const [editPayment, setEditPayment] = useState(null);
+  const [editPayment, setEditPayment]         = useState(null);
+
+  const queryClient = useQueryClient();
 
   const role = localStorage.getItem("role");
   const canManageStudents = role === "receptionist";
-  const canViewBalance = role === "admin" || role === "director" || role === "receptionist";
+  const canViewBalance    = role === "admin" || role === "director" || role === "receptionist";
 
-  const fetchStudents = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await API.get("/students");
-      setStudents(res.data);
-    } catch {
-      alert("Failed to fetch students");
-    } finally {
-      setLoading(false);
-    }
-  }, [refresh]);
+  // ── Students list (cached) ──────────────────────────────────────
+  const { data: students = [], isLoading: loading, refetch: fetchStudents } = useQuery({
+    queryKey: ["students", refresh],
+    queryFn:  () => API.get("/students").then(r => r.data),
+    staleTime: 2 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
+  // ── Payment history (cached per student) ───────────────────────
+  const { data: paymentHistory = [], isLoading: historyLoading } = useQuery({
+    queryKey: ["payments", selectedStudent?.id],
+    queryFn:  () => API.get(`/payments/${selectedStudent.id}`).then(r => r.data),
+    enabled:  !!selectedStudent,
+    staleTime: 5 * 60 * 1000,
+  });
 
+  // ── Helpers ────────────────────────────────────────────────────
   const getStudentStatus = (datePaid, duration) => {
     if (!datePaid) return "Left";
     const paymentDate = new Date(datePaid);
-    const expiryDate = new Date(paymentDate);
+    const expiryDate  = new Date(paymentDate);
     expiryDate.setMonth(expiryDate.getMonth() + Number(duration || 1));
-    const today = new Date();
+    const today    = new Date();
     const diffDays = (today - expiryDate) / (1000 * 60 * 60 * 24);
-    if (diffDays < 0) return "Active";
+    if (diffDays < 0)              return "Active";
     if (diffDays >= 0 && diffDays < 30) return "Expired";
     return "Left";
   };
@@ -100,24 +95,13 @@ function StudentList({ refresh, triggerRefresh }) {
 
   const handleUpdateStudent = () => setEditStep(2);
 
+  const openPaymentHistory = (student) => setSelectedStudent(student);
 
-  const openPaymentHistory = async (student) => {
-    try {
-      setSelectedStudent(student);
-      const res = await API.get(`/payments/${student.id}`);
-      setPaymentHistory(res.data);
-    } catch (error) {
-      console.error("Failed to load payments:", error);
-      setPaymentHistory([]);
-    }
-  };
-
+  // ── Payment actions ────────────────────────────────────────────
   const updatePayment = async () => {
     try {
       await API.put(`/payments/${editPayment.id}`, editPayment);
-      setPaymentHistory((prev) =>
-        prev.map((p) => (p.id === editPayment.id ? editPayment : p))
-      );
+      queryClient.invalidateQueries({ queryKey: ["payments", selectedStudent?.id] });
       setEditPayment(null);
       fetchStudents();
       triggerRefresh();
@@ -132,7 +116,7 @@ function StudentList({ refresh, triggerRefresh }) {
       await axios.delete(`https://riseway-app.onrender.com/api/payments/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setPaymentHistory((prev) => prev.filter((p) => p.id !== id));
+      queryClient.invalidateQueries({ queryKey: ["payments", selectedStudent?.id] });
     } catch (error) {
       console.log("Delete failed:", error.response?.data || error);
     }
@@ -152,8 +136,9 @@ function StudentList({ refresh, triggerRefresh }) {
     }
   };
 
+  // ── Filtering ──────────────────────────────────────────────────
   const filteredStudents = students.filter((s) => {
-    const text = search.toLowerCase();
+    const text          = search.toLowerCase();
     const studentStatus = getStudentStatus(s.payment?.date_paid, s.payment?.duration);
     const matchesSearch =
       !text ||
@@ -163,15 +148,16 @@ function StudentList({ refresh, triggerRefresh }) {
 
     return (
       matchesSearch &&
-      (statusFilter === "All" || studentStatus === statusFilter) &&
-      (modeFilter === "All" || s.mode === modeFilter) &&
-      (levelFilter === "All" || s.level === levelFilter) &&
+      (statusFilter    === "All" || studentStatus === statusFilter) &&
+      (modeFilter      === "All" || s.mode        === modeFilter) &&
+      (levelFilter     === "All" || s.level       === levelFilter) &&
       (membershipFilter === "All" ||
         (membershipFilter === "Yes" && s.membership) ||
-        (membershipFilter === "No" && !s.membership))
+        (membershipFilter === "No"  && !s.membership))
     );
   });
 
+  // ── Render ─────────────────────────────────────────────────────
   return (
     <div>
       <h2>Students List</h2>
@@ -191,7 +177,7 @@ function StudentList({ refresh, triggerRefresh }) {
             setModeFilter={setModeFilter}
             levelFilter={levelFilter}
             setLevelFilter={setLevelFilter}
-            totalStudents={filteredStudents.length} 
+            totalStudents={filteredStudents.length}
           />
 
           <StudentTable
@@ -215,10 +201,8 @@ function StudentList({ refresh, triggerRefresh }) {
           paymentData={paymentData}
           setPaymentData={setPaymentData}
           handleUpdateStudent={handleUpdateStudent}
-          onSuccess={(updatedStudent) => {
-            setStudents(prev =>
-              prev.map(s => s.id === updatedStudent.id ? updatedStudent : s)
-            ); 
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["students"] });
           }}
         />
       )}
@@ -228,6 +212,7 @@ function StudentList({ refresh, triggerRefresh }) {
           selectedStudent={selectedStudent}
           setSelectedStudent={setSelectedStudent}
           paymentHistory={paymentHistory}
+          loading={historyLoading}
           editPayment={editPayment}
           setEditPayment={setEditPayment}
           updatePayment={updatePayment}
