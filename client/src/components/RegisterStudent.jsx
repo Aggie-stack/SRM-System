@@ -130,7 +130,7 @@ function RegisterStudent({ onStudentAdded }) {
       setPayment(INITIAL_PAYMENT);
       setStep(1);
 
-      if (onStudentAdded) onStudentAdded(studentId);
+      if (onStudentAdded) onStudentAdded(studentId, { ...student, admission_number: res.data.admission_number });
 
     } catch (err) {
       console.error("Registration Error:", err);
