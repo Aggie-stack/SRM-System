@@ -383,6 +383,7 @@ function Students() {
   };
 
   const handlePaymentAdded = async (studentId, closeModal) => {
+    closeModal();
     setReceiptLoading(true);
     try {
       const r = await buildReceipt(studentId);
@@ -393,7 +394,6 @@ function Students() {
       setReceiptLoading(false);
     }
     triggerRefresh();
-    closeModal();
   };
 
 
