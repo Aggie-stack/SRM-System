@@ -41,7 +41,8 @@ socketio = SocketIO(
     app,
     cors_allowed_origins=[
         "http://127.0.0.1:5173",
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "https://srm-system-beta.vercel.app"
     ],
     async_mode="threading"
 )
@@ -51,7 +52,8 @@ CORS(
     resources={r"/api/*": {
         "origins": [
             "http://127.0.0.1:5173",
-            "http://localhost:5173"
+            "http://localhost:5173",
+            "https://srm-system-beta.vercel.app"
         ]
     }},
     supports_credentials=True,
