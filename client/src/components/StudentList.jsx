@@ -90,35 +90,16 @@ function StudentList({ refresh, triggerRefresh }) {
     setEditStudent({ ...student });
     setEditStep(1);
     setPaymentData({
-      id: student.payment_id || null,
-      amount: student.amount || "",
-      date_paid: student.date_paid || "",
-      duration: student.duration || "",
+      amount_paid: student.payment?.amount_paid || "",
+      date_paid:   student.payment?.date_paid   || "",
+      duration:    student.payment?.duration    || "",
+      method:      student.payment?.method      || "cash",
+      reference:   student.payment?.reference   || "",
     });
   };
 
   const handleUpdateStudent = () => setEditStep(2);
 
-  const handleSaveAll = async () => {
-    try {
-      await API.put(`/students/${editStudent.id}`, editStudent);
-      await API.post("/payments/upsert", {
-        id: paymentData.id,
-        student_id: editStudent.id,
-        amount: paymentData.amount,
-        date_paid: paymentData.date_paid,
-        duration: paymentData.duration,
-      });
-      setEditStudent(null);
-      setEditStep(1);
-      setPaymentData({ id: null, amount: "", date_paid: "", duration: "" });
-      fetchStudents();
-      triggerRefresh();
-    } catch (err) {
-      console.error(err);
-      alert("Save failed");
-    }
-  };
 
   const openPaymentHistory = async (student) => {
     try {
@@ -234,7 +215,11 @@ function StudentList({ refresh, triggerRefresh }) {
           paymentData={paymentData}
           setPaymentData={setPaymentData}
           handleUpdateStudent={handleUpdateStudent}
-          handleSaveAll={handleSaveAll}
+          onSuccess={(updatedStudent) => {
+            setStudents(prev =>
+              prev.map(s => s.id === updatedStudent.id ? updatedStudent : s)
+            ); 
+          }}
         />
       )}
 

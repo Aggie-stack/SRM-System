@@ -8,7 +8,6 @@ function EditStudentRegistration({
   paymentData,
   setPaymentData,
   handleUpdateStudent,
-  handleSaveAll: handleSaveAllProp,
   onSuccess,
 }) {
   const set = (field, value) =>
@@ -142,7 +141,6 @@ function EditStudentRegistration({
     }
   };
 
-  const handleSaveAll = handleSaveAllProp ?? handleSaveAllInternal;
 
   return (
     <div className="modal-overlay">
