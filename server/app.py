@@ -153,6 +153,10 @@ def after_request(response):
 # ─────────────────────────────────────────────
 # AUTH
 # ─────────────────────────────────────────────
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        return "", 200
 
 @app.route("/api/login", methods=["POST"])
 def login():
