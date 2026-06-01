@@ -2,6 +2,7 @@ function PaymentHistoryModal({
   selectedStudent,
   setSelectedStudent,
   paymentHistory,
+  loading,
 }) {
   return (
     <div className="modal-overlay">
@@ -9,7 +10,11 @@ function PaymentHistoryModal({
 
         <h3>Payment History - {selectedStudent.name}</h3>
 
-        {paymentHistory.length > 0 ? (
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
+            ⏳ Loading payments...
+          </div>
+        ) : paymentHistory.length > 0 ? (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
@@ -19,16 +24,11 @@ function PaymentHistoryModal({
                 <th style={{ textAlign: "center", padding: "8px" }}>Due Date</th>
               </tr>
             </thead>
-
             <tbody>
               {paymentHistory.map((p) => {
                 const isExpired = new Date(p.due_date) < new Date();
-
                 return (
-                  <tr
-                    key={p.id}
-                    className={isExpired ? "expired-row" : ""}
-                  >
+                  <tr key={p.id} className={isExpired ? "expired-row" : ""}>
                     <td style={{ textAlign: "center", padding: "8px" }}>{p.amount}</td>
                     <td style={{ textAlign: "center", padding: "8px" }}>{p.date_paid}</td>
                     <td style={{ textAlign: "center", padding: "8px" }}>{p.duration}</td>
@@ -43,9 +43,7 @@ function PaymentHistoryModal({
         )}
 
         <div className="modal-actions">
-          <button onClick={() => setSelectedStudent(null)}>
-            Close
-          </button>
+          <button onClick={() => setSelectedStudent(null)}>Close</button>
         </div>
 
       </div>

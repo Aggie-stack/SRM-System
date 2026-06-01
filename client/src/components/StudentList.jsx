@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import API from "../api";
 import axios from "axios";
 
@@ -51,8 +52,8 @@ function StudentList({ refresh, triggerRefresh }) {
 
   const [deleteStudent, setDeleteStudent] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [paymentHistory, setPaymentHistory] = useState([]);
   const [editPayment, setEditPayment] = useState(null);
+  const queryClient = useQueryClient();
 
   const role = localStorage.getItem("role");
   const canManageStudents = role === "receptionist";
@@ -100,23 +101,21 @@ function StudentList({ refresh, triggerRefresh }) {
 
   const handleUpdateStudent = () => setEditStep(2);
 
-
-  const openPaymentHistory = async (student) => {
-    try {
-      setSelectedStudent(student);
-      const res = await API.get(`/payments/${student.id}`);
-      setPaymentHistory(res.data);
-    } catch (error) {
-      console.error("Failed to load payments:", error);
-      setPaymentHistory([]);
-    }
+  const openPaymentHistory = (student) => {
+    setSelectedStudent(student);
   };
+  
+  const { data: paymentHistory = [], isLoading: historyLoading } = useQuery({
+    queryKey: ["payments", selectedStudent?.id],
+    queryFn: () => API.get(`/payments/${selectedStudent.id}`).then(r => r.data),
+    enabled: !!selectedStudent,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const updatePayment = async () => {
     try {
       await API.put(`/payments/${editPayment.id}`, editPayment);
-      setPaymentHistory((prev) =>
-        prev.map((p) => (p.id === editPayment.id ? editPayment : p))
+      queryClient.invalidateQueries({ queryKey: ["payments", selectedStudent?.id] }
       );
       setEditPayment(null);
       fetchStudents();
@@ -132,7 +131,7 @@ function StudentList({ refresh, triggerRefresh }) {
       await axios.delete(`https://riseway-app.onrender.com/api/payments/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setPaymentHistory((prev) => prev.filter((p) => p.id !== id));
+      queryClient.invalidateQueries({ queryKey: ["payments", selectedStudent?.id] });
     } catch (error) {
       console.log("Delete failed:", error.response?.data || error);
     }
@@ -228,6 +227,7 @@ function StudentList({ refresh, triggerRefresh }) {
           selectedStudent={selectedStudent}
           setSelectedStudent={setSelectedStudent}
           paymentHistory={paymentHistory}
+          loading={historyLoading}
           editPayment={editPayment}
           setEditPayment={setEditPayment}
           updatePayment={updatePayment}
