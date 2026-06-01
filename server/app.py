@@ -169,6 +169,10 @@ def handle_options():
     if request.method == "OPTIONS":
         return "", 200
 
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"}), 200
+    
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
