@@ -16,6 +16,16 @@ from flask_cors import CORS
 
 import models
 
+# ─────────────────────────────────────────────
+# ALLOWED ORIGINS
+# ─────────────────────────────────────────────
+
+ALLOWED_ORIGINS = [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "https://srm-system-beta.vercel.app",
+]
+
 
 # ─────────────────────────────────────────────
 # APP SETUP
@@ -39,23 +49,13 @@ api = Api(app)
 
 socketio = SocketIO(
     app,
-    cors_allowed_origins=[
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-        "https://srm-system-beta.vercel.app"
-    ],
+    cors_allowed_origins=ALLOWED_ORIGINS,
     async_mode="threading"
 )
 
 CORS(
     app,
-    resources={r"/api/*": {
-        "origins": [
-            "http://127.0.0.1:5173",
-            "http://localhost:5173",
-            "https://srm-system-beta.vercel.app"
-        ]
-    }},
+    resources={r"/api/*": {"origins": ALLOWED_ORIGINS}},
     supports_credentials=True,
     allow_headers=["Content-Type", "Authorization"],
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
@@ -141,7 +141,9 @@ def init_db():
 
 @app.after_request
 def after_request(response):
-    response.headers.add("Access-Control-Allow-Origin",      "http://127.0.0.1:5173")
+    origin = request.headers.get("Origin")
+    if origin in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers.add("Access-Control-Allow-Headers",     "Content-Type,Authorization")
     response.headers.add("Access-Control-Allow-Methods",     "GET,POST,PUT,DELETE,OPTIONS")
     response.headers.add("Access-Control-Allow-Credentials", "true")
