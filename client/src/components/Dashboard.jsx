@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import API from "../api";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -749,46 +750,62 @@ function RecentPayments({ payments }) {
 }
 
 function Dashboard({ refresh }) {
-  const [data,          setData]          = useState(DEFAULT_DATA);
   const [month,         setMonth]         = useState(null);
   const [year,          setYear]          = useState(getThisYear);
   const [viewMode,      setViewMode]      = useState("year");
-  const [loading,       setLoading]       = useState(true);
-  const [courses,       setCourses]       = useState([]);
-  const [renewals,      setRenewals]      = useState([]);
-  const [payments,      setPayments]      = useState([]);
   const [paymentFilter, setPaymentFilter] = useState("7");
 
   const activeMonth         = viewMode === "month" && month ? month : null;
   const needsMonthSelection = viewMode === "month" && !month;
 
-  const fetchData = useCallback(async () => {
-    if (needsMonthSelection) { setLoading(false); return; }
-    try {
-      setLoading(true);
-      const token  = localStorage.getItem("token");
-      const params = { year };
-      if (activeMonth) params.month = activeMonth;
+  const token  = localStorage.getItem("token");
+  const params = { year, ...(activeMonth ? { month: activeMonth } : {}) };
+  const headers = { Authorization: `Bearer ${token}` };
 
-      const [dashRes, courseRes, renewalRes, paymentRes] = await Promise.allSettled([
-        API.get("/dashboard",                 { params, headers:{ Authorization:`Bearer ${token}` } }),
-        API.get("/dashboard/courses",         { params, headers:{ Authorization:`Bearer ${token}` } }),
-        API.get("/dashboard/renewals-due",    { headers:{ Authorization:`Bearer ${token}` } }),
-        API.get("/dashboard/recent-payments", { params:{ days:paymentFilter }, headers:{ Authorization:`Bearer ${token}` } }),
-      ]);
+  // ── Cached queries ──────────────────────────────────────────────
+  const { data: dashRaw,    isLoading: l1 } = useQuery({
+    queryKey: ["dashboard", year, activeMonth],
+    queryFn:  () => API.get("/dashboard", { params, headers }).then(r => r.data),
+    enabled:  !needsMonthSelection,
+    staleTime: 5 * 60 * 1000,
+  });
 
-      if (dashRes.status    === "fulfilled") setData({ ...DEFAULT_DATA, ...dashRes.value.data });
-      if (courseRes.status  === "fulfilled" && Array.isArray(courseRes.value.data))  setCourses(courseRes.value.data);
-      if (renewalRes.status === "fulfilled" && Array.isArray(renewalRes.value.data)) setRenewals(renewalRes.value.data);
-      if (paymentRes.status === "fulfilled" && Array.isArray(paymentRes.value.data)) setPayments(paymentRes.value.data);
-    } catch (err) {
-      console.error(err.response?.data ?? err.message);
-    } finally {
-      setLoading(false);
+  const { data: coursesRaw, isLoading: l2 } = useQuery({
+    queryKey: ["dashboard-courses", year, activeMonth],
+    queryFn:  () => API.get("/dashboard/courses", { params, headers }).then(r => r.data),
+    enabled:  !needsMonthSelection,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: renewalsRaw, isLoading: l3 } = useQuery({
+    queryKey: ["dashboard-renewals"],
+    queryFn:  () => API.get("/dashboard/renewals-due", { headers }).then(r => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: paymentsRaw, isLoading: l4 } = useQuery({
+    queryKey: ["dashboard-payments", paymentFilter],
+    queryFn:  () => API.get("/dashboard/recent-payments", { params: { days: paymentFilter }, headers }).then(r => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ── Derived state ───────────────────────────────────────────────
+  const data     = { ...DEFAULT_DATA, ...(dashRaw ?? {}) };
+  const courses  = Array.isArray(coursesRaw)  ? coursesRaw  : [];
+  const renewals = Array.isArray(renewalsRaw) ? renewalsRaw : [];
+  const payments = Array.isArray(paymentsRaw) ? paymentsRaw : [];
+  const loading  = l1 || l2 || l3 || l4;
+
+  // Also re-fetch when parent triggers refresh
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (refresh) {
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-courses"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-renewals"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-payments"] });
     }
-  }, [refresh, activeMonth, year, viewMode, paymentFilter, needsMonthSelection]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  }, [refresh]);
 
   const switchToYear  = () => { setViewMode("year");  setMonth(null); setYear(getThisYear()); };
   const switchToMonth = () => { setViewMode("month"); setMonth(null); };
@@ -799,11 +816,11 @@ function Dashboard({ refresh }) {
 
   const isMonthScoped = viewMode === "month" && !!month;
 
+  // ── JSX is exactly the same as before ──────────────────────────
   return (
     <>
       <style>{GLOBAL_STYLE}</style>
       <div className="db">
-
         {/* Header */}
         <div className="db-header">
           <div className="db-title-wrap">
@@ -826,18 +843,14 @@ function Dashboard({ refresh }) {
           <button className={`ftab${viewMode==="month" ? " month-on" : ""}`} onClick={switchToMonth}>
             📆 Month
           </button>
-
           <YearDropdown year={year} onChange={(y) => { setYear(y); setMonth(null); }} />
-
           {viewMode === "month" && (
             <select className="fselect" value={month ?? ""} onChange={(e) => setMonth(e.target.value ? Number(e.target.value) : null)}>
               <option value="">— Pick month —</option>
               {MONTHS_FULL.map((name, i) => <option key={i+1} value={i+1}>{name}</option>)}
             </select>
           )}
-
           <span className="fdiv">|</span>
-
           <select className="fselect" value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)}>
             <option value="7">Payments in 7days</option>
             <option value="30">Payments 30d</option>
@@ -867,35 +880,24 @@ function Dashboard({ refresh }) {
                 <StatCards data={data} />
               </>
             )}
-
             <p className="section-label">Engagement</p>
-            {/* 3-col on desktop → 1-col on mobile via .engage-grid */}
             <div className="engage-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16, alignItems:"start" }}>
               <div className="cc">
                 <div className="cc-title">
                   <span className="cc-title-dot" />
                   <span className="cc-title-text">Mode of Study</span>
-                  {/* Show live counts badge: Online + Physical */}
                   {!needsMonthSelection && (() => {
                     const nd = normaliseModeData(data.mode_gender);
                     const total = nd.reduce((s, d) => s + d.value, 0);
-                    return total > 0
-                      ? <span className="cc-badge">{formatNum(total)} students</span>
-                      : null;
+                    return total > 0 ? <span className="cc-badge">{formatNum(total)} students</span> : null;
                   })()}
                 </div>
-                <ColoredPie
-                  rawData={data.mode_gender}
-                  height={200}
-                  needsMonthSelection={needsMonthSelection}
-                />
+                <ColoredPie rawData={data.mode_gender} height={200} needsMonthSelection={needsMonthSelection} />
               </div>
               <EnrolmentByCourse courses={courses} needsMonthSelection={needsMonthSelection} />
               <RecentPayments payments={payments} />
             </div>
-
             <p className="section-label">Performance</p>
-            {/* 2-col on desktop → 1-col on mobile via .perf-grid */}
             <div className="perf-grid" style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:12, marginBottom:16, alignItems:"start" }}>
               <div className="cc">
                 <div className="cc-title">
@@ -906,7 +908,6 @@ function Dashboard({ refresh }) {
               </div>
               <RenewalsDueSoon renewals={renewals} />
             </div>
-
             {!needsMonthSelection && (
               <>
                 <p className="section-label">Income</p>
@@ -914,9 +915,7 @@ function Dashboard({ refresh }) {
                   <div className="cc-title">
                     <span className="cc-title-dot" />
                     <span className="cc-title-text">
-                      {isMonthScoped
-                        ? `Income — ${MONTHS_FULL[month - 1]} ${year}`
-                        : `Monthly income breakdown — ${year}`}
+                      {isMonthScoped ? `Income — ${MONTHS_FULL[month - 1]} ${year}` : `Monthly income breakdown — ${year}`}
                     </span>
                   </div>
                   <IncomeChart data={data.classes} viewMode={viewMode} month={month} />
