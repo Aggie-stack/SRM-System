@@ -382,27 +382,12 @@ function Students() {
     return null;
   };
 
-  const handlePaymentAdded = async (studentId, closeModal, studentData) => {
+  const handlePaymentAdded = async (studentId, closeModal) => {
     closeModal();
     setReceiptLoading(true);
     try {
-      const payRes = await API.get(`/payments/${studentId}`);
-      const payments = payRes.data;
-
-    if (payments && payments.length > 0) {
-      const latest = [...payments].sort((a, b) => b.id - a.id)[0];
-      setReceipt({
-        receiptNo:       `REC-${String(latest.id).padStart(4, "0")}`,
-        studentName:     studentData?.name || "Student",
-        admissionNumber: studentData?.admission_number || "—",
-        amount:          latest.amount_paid ?? latest.amount,
-        datePaid:        latest.date_paid,
-        duration:        latest.duration,
-        dueDate:         latest.due_date,
-        issuedAt:        new Date().toLocaleString(),
-        logoUrl:         window.location.origin + LOGO_URL,
-      });
-      }
+      const r = await buildReceipt(studentId);
+      if (r) setReceipt(r);
     } catch (err) {
       console.error("Could not load receipt data:", err);
     } finally {
@@ -707,8 +692,8 @@ useEffect(() => {
         <div className="modal-overlay">
           <div className="modal">
             <RegisterStudent
-              onStudentAdded={(id, studentData) =>
-                handlePaymentAdded(id, () => setShowRegisterModal(false, studentData))
+              onStudentAdded={(id) =>
+                handlePaymentAdded(id, () => setShowRegisterModal(false))
               }
             />
             <button
@@ -726,8 +711,8 @@ useEffect(() => {
         <div className="modal-overlay">
           <div className="modal">
             <RenewalPayment
-              onRenewalAdded={(id, studentData) =>
-                handlePaymentAdded(id, () => setShowRenewalModal(false, studentData))
+              onRenewalAdded={(id) =>
+                handlePaymentAdded(id, () => setShowRenewalModal(false))
               }
             />
             <button
