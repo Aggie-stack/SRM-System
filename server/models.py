@@ -5,7 +5,7 @@ models.py – SQLAlchemy-powered data layer.
 from __future__ import annotations
 
 import calendar
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 import bcrypt
@@ -113,7 +113,7 @@ class Payment(db.Model):
     invoice_id  = db.Column(db.Integer, db.ForeignKey("invoices.id"), nullable=True)
     invoice     = db.relationship("Invoice", backref="payments")
     amount_paid = db.Column(db.Float, nullable=False)
-    date_paid   = db.Column(db.Date, nullable=False)
+    date_paid   = db.Column(db.Date, nullable=False, index=True)
     duration    = db.Column(db.Integer, nullable=False)
     due_date    = db.Column(db.Date, nullable=False)
     method      = db.Column(db.String(50), default="cash")
@@ -290,19 +290,70 @@ def create_student(data: dict):
     return student.to_dict()
 
 
-def get_all_students(search: Optional[str] = None):
+def get_all_students(search=None):
     query = Student.query
     if search:
-        term  = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                Student.name.ilike(term),
-                Student.phone.ilike(term),
-                Student.course.ilike(term),
-                Student.admission_number.ilike(term),
-            )
-        )
-    return [s.to_dict() for s in query.order_by(Student.id.desc()).all()]
+        term = f"%{search}%"
+        query = query.filter(db.or_(
+            Student.name.ilike(term),
+            Student.phone.ilike(term),
+            Student.course.ilike(term),
+            Student.admission_number.ilike(term),
+        ))
+    students = query.order_by(Student.id.desc()).all()
+    if not students:
+        return []
+
+    ids = [s.id for s in students]
+
+    # One query for all latest payments
+    latest_payments = (
+        db.session.query(Payment)
+        .filter(Payment.student_id.in_(ids))
+        .order_by(Payment.student_id, Payment.id.desc())
+        .all()
+    )
+    payment_map = {}
+    for p in latest_payments:
+        if p.student_id not in payment_map:
+            payment_map[p.student_id] = p
+
+    # One query for all invoices
+    invoices = Invoice.query.filter(Invoice.student_id.in_(ids)).all()
+    invoice_map = {inv.student_id: inv for inv in invoices}
+
+    results = []
+    for s in students:
+        lp = payment_map.get(s.id)
+        inv = invoice_map.get(s.id)
+        balance_data = {
+            "course_fee":   inv.course_fee   if inv else 0,
+            "expected_fee": inv.total_amount if inv else 0,
+            "paid":         (inv.total_amount - inv.balance) if inv else 0,
+            "balance":      inv.balance      if inv else 0,
+            "status":       inv.status       if inv else "unpaid",
+        } if inv else {"balance": 0, "course_fee": 0}
+
+        results.append({
+            "id":                 s.id,
+            "admission_number":   s.admission_number,
+            "name":               s.name,
+            "phone":              s.phone,
+            "email":              s.email,
+            "gender":             s.gender,
+            "course":             s.course,
+            "course_id":          s.course_id,
+            "mode":               s.mode,
+            "level":              s.level,
+            "membership":         s.membership,
+            "membership_no":      s.membership_no,
+            "membership_benefit": s.membership_benefit,
+            "status":             _student_status(lp.due_date if lp else None),
+            "balance":            balance_data.get("balance", 0),
+            "created_at":         s.created_at.isoformat(),
+            "payment":            lp.to_dict() if lp else None,
+        })
+    return results
 
 
 def get_student_by_id(student_id: int):
@@ -418,7 +469,6 @@ def create_payment(data: dict):
         "due_date":         payment.due_date.isoformat() if payment.due_date else None,
     }
 
-
 def get_payments_by_student(student_id: int):
     payments = (
         Payment.query
@@ -426,24 +476,21 @@ def get_payments_by_student(student_id: int):
         .order_by(Payment.id.desc())
         .all()
     )
-    results = []
-    for payment in payments:
-        student = Student.query.get(payment.student_id)
-        results.append({
-            "id":               payment.id,
-            "student_id":       payment.student_id,
-            "student_name":     student.name if student else "",
-            "course":           student.course if student else "",
-            "admission_number": student.admission_number if student else "",
-            "amount":           payment.amount_paid,
-            "amount_paid":      payment.amount_paid,
-            "date_paid":        payment.date_paid.isoformat() if payment.date_paid else None,
-            "duration":         payment.duration,
-            "due_date":         payment.due_date.isoformat() if payment.due_date else None,
-            "renewal_no":       payment.renewal_no,
-        })
-    return results
-
+    # All payments belong to the same student — fetch once instead of once per row
+    student = db.session.get(Student, student_id)
+    return [{
+        "id":               p.id,
+        "student_id":       p.student_id,
+        "student_name":     student.name if student else "",
+        "course":           student.course if student else "",
+        "admission_number": student.admission_number if student else "",
+        "amount":           p.amount_paid,
+        "amount_paid":      p.amount_paid,
+        "date_paid":        p.date_paid.isoformat() if p.date_paid else None,
+        "duration":         p.duration,
+        "due_date":         p.due_date.isoformat() if p.due_date else None,
+        "renewal_no":       p.renewal_no,
+    } for p in payments]
 
 def delete_payment(payment_id: int):
     payment = Payment.query.get(payment_id)
@@ -459,25 +506,26 @@ def delete_payment(payment_id: int):
 
 
 def get_recent_payments(days=7):
-    payments = Payment.query.order_by(Payment.id.desc()).all()
+    query = Payment.query.order_by(Payment.id.desc())
     if days is not None:
-        cutoff   = date.today()
-        payments = [p for p in payments if (cutoff - p.date_paid).days <= days]
-    results = []
-    for payment in payments:
-        student = Student.query.get(payment.student_id)
-        results.append({
-            "id":           payment.id,
-            "student_id":   payment.student_id,
-            "student_name": student.name if student else "",
-            "course":       student.course if student else "",
-            "amount":       payment.amount_paid,
-            "date_paid":    payment.date_paid.isoformat() if payment.date_paid else None,
-            "duration":     payment.duration,
-            "due_date":     payment.due_date.isoformat() if payment.due_date else None,
-            "renewal_no":   payment.renewal_no,
-        })
-    return results
+        cutoff = date.today() - timedelta(days=days)
+        query = query.filter(Payment.date_paid >= cutoff)
+    payments = query.limit(50).all()   # cap at 50 rows
+
+    student_ids = list({p.student_id for p in payments})
+    students = {s.id: s for s in Student.query.filter(Student.id.in_(student_ids)).all()}
+
+    return [{
+        "id":           p.id,
+        "student_id":   p.student_id,
+        "student_name": students[p.student_id].name if p.student_id in students else "",
+        "course":       students[p.student_id].course if p.student_id in students else "",
+        "amount":       p.amount_paid,
+        "date_paid":    p.date_paid.isoformat() if p.date_paid else None,
+        "duration":     p.duration,
+        "due_date":     p.due_date.isoformat() if p.due_date else None,
+        "renewal_no":   p.renewal_no,
+    } for p in payments]
 
 
 def upsert_payment(data: dict):
@@ -685,23 +733,27 @@ def get_course_stats(month: Optional[int] = None, year: Optional[int] = None):
 
 
 def get_renewals_due():
-    today    = date.today()
-    upcoming = []
-    for payment in Payment.query.all():
-        try:
-            delta = (payment.due_date - today).days
-            if 0 <= delta <= 7:
-                student = Student.query.get(payment.student_id)
-                upcoming.append({
-                    "student_id":       payment.student_id,
-                    "student_name":     student.name if student else "",
-                    "admission_number": student.admission_number if student else "",
-                    "course":           student.course if student else "",
-                    "due_date":         payment.due_date.isoformat(),
-                    "amount":           payment.amount_paid,
-                    "renewal_no":       payment.renewal_no,
-                })
-        except Exception:
-            continue
-    upcoming.sort(key=lambda x: x["due_date"])
-    return upcoming
+    today  = date.today()
+    cutoff = today + timedelta(days=7)
+
+    due_payments = (
+        Payment.query
+        .filter(Payment.due_date >= today, Payment.due_date <= cutoff)
+        .order_by(Payment.due_date)
+        .all()
+    )
+    if not due_payments:
+        return []
+
+    student_ids = list({p.student_id for p in due_payments})
+    students = {s.id: s for s in Student.query.filter(Student.id.in_(student_ids)).all()}
+
+    return [{
+        "student_id":       p.student_id,
+        "student_name":     students[p.student_id].name if p.student_id in students else "",
+        "admission_number": students[p.student_id].admission_number if p.student_id in students else "",
+        "course":           students[p.student_id].course if p.student_id in students else "",
+        "due_date":         p.due_date.isoformat(),
+        "amount":           p.amount_paid,
+        "renewal_no":       p.renewal_no,
+    } for p in due_payments]

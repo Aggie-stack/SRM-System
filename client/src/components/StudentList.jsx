@@ -112,10 +112,7 @@ function StudentList({ refresh, triggerRefresh }) {
 
   const deletePayment = async (id) => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`https://riseway-app.onrender.com/api/payments/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await API.delete(`/payments/${id}`);
       queryClient.invalidateQueries({ queryKey: ["payments", selectedStudent?.id] });
     } catch (error) {
       console.log("Delete failed:", error.response?.data || error);
@@ -124,10 +121,7 @@ function StudentList({ refresh, triggerRefresh }) {
 
   const confirmDelete = async () => {
     try {
-      const token = localStorage.getItem("token");
-      await API.delete(`/students/${deleteStudent.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await API.delete(`/students/${deleteStudent.id}`);
       setDeleteStudent(null);
       fetchStudents();
       triggerRefresh();
@@ -201,8 +195,12 @@ function StudentList({ refresh, triggerRefresh }) {
           paymentData={paymentData}
           setPaymentData={setPaymentData}
           handleUpdateStudent={handleUpdateStudent}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ["students"] });
+          onSuccess={(freshStudent) => {
+            if (freshStudent) {
+              queryClient.setQueryData(["students", refresh], (old) =>
+              old?.map((s) => s.id === freshStudent.id ? freshStudent : s) ?? old
+            );
+            }
           }}
         />
       )}
