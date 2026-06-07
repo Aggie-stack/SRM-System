@@ -496,10 +496,25 @@ def delete_payment(payment_id: int):
     payment = Payment.query.get(payment_id)
     if not payment:
         return False
-    invoice = Invoice.query.get(payment.invoice_id)
+
+    invoice = Invoice.query.filter_by(student_id=payment.student_id).first()
     if invoice:
-        invoice.balance += payment.amount_paid
-        invoice.status   = "unpaid" if invoice.balance >= invoice.total_amount else "partial"
+        # Recalculate how much has been paid excluding this payment
+        remaining_payments = Payment.query.filter(
+            Payment.student_id == payment.student_id,
+            Payment.id != payment_id
+        ).all()
+
+        total_paid      = sum(p.amount_paid for p in remaining_payments)
+        new_balance     = max(invoice.total_amount - total_paid, 0)
+
+        invoice.balance = new_balance
+        invoice.status  = (
+            "paid"    if new_balance <= 0 else
+            "partial" if total_paid  >  0 else
+            "unpaid"
+        )
+
     db.session.delete(payment)
     db.session.commit()
     return True
