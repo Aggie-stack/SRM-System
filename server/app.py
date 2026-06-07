@@ -486,38 +486,7 @@ def recent_payments():
 def renewals_due():
     return jsonify(models.get_renewals_due()), 200
 
-# ─── TEMP: one-time balance fix (delete after use) ───────────────
-@app.route("/api/fix-balances", methods=["GET"])
-def fix_balances():
-    from sqlalchemy import func
-    invoices = models.Invoice.query.all()
-    fixed = []
 
-    for invoice in invoices:
-        total_paid = db.session.query(
-            func.sum(models.Payment.amount_paid)
-        ).filter(
-            models.Payment.student_id == invoice.student_id
-        ).scalar() or 0.0
-
-        new_balance = max(invoice.total_amount - total_paid, 0)
-
-        invoice.balance = new_balance
-        invoice.status  = (
-            "paid"    if new_balance <= 0 else
-            "partial" if total_paid  >  0 else
-            "unpaid"
-        )
-        fixed.append({
-            "student_id": invoice.student_id,
-            "total_paid": total_paid,
-            "new_balance": new_balance,
-            "status": invoice.status,
-        })
-
-    db.session.commit()
-    return jsonify({"fixed": len(fixed), "details": fixed}), 200
-    
 # ─────────────────────────────────────────────
 # RUN
 # ─────────────────────────────────────────────
