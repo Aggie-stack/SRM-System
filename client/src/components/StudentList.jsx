@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import API from "../api";
-import axios from "axios";
 
 import StudentTable from "./StudentTable";
 import SearchFilter from "./SearchFilter";
@@ -31,36 +30,36 @@ function StudentListSkeleton() {
 }
 
 function StudentList({ refresh, triggerRefresh }) {
-  const [search, setSearch]                   = useState("");
-  const [statusFilter, setStatusFilter]       = useState("All");
+  const [search, setSearch]                     = useState("");
+  const [statusFilter, setStatusFilter]         = useState("All");
   const [membershipFilter, setMembershipFilter] = useState("All");
-  const [modeFilter, setModeFilter]           = useState("All");
-  const [levelFilter, setLevelFilter]         = useState("All");
+  const [modeFilter, setModeFilter]             = useState("All");
+  const [levelFilter, setLevelFilter]           = useState("All");
 
-  const [editStudent, setEditStudent]         = useState(null);
-  const [editStep, setEditStep]               = useState(1);
-  const [paymentData, setPaymentData]         = useState({
+  const [editStudent, setEditStudent]           = useState(null);
+  const [editStep, setEditStep]                 = useState(1);
+  const [paymentData, setPaymentData]           = useState({
     id: null, amount: "", date_paid: "", duration: "",
   });
 
-  const [deleteStudent, setDeleteStudent]     = useState(null);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [editPayment, setEditPayment]         = useState(null);
+  const [deleteStudent, setDeleteStudent]       = useState(null);
+  const [selectedStudent, setSelectedStudent]   = useState(null);
+  const [editPayment, setEditPayment]           = useState(null);
 
   const queryClient = useQueryClient();
 
-  const role = localStorage.getItem("role");
+  const role              = localStorage.getItem("role");
   const canManageStudents = role === "receptionist";
   const canViewBalance    = role === "admin" || role === "director" || role === "receptionist";
 
-  // ── Students list (cached) ──────────────────────────────────────
+  // ── Students list ───────────────────────────────────────────────
   const { data: students = [], isLoading: loading, refetch: fetchStudents } = useQuery({
     queryKey: ["students", refresh],
     queryFn:  () => API.get("/students").then(r => r.data),
     staleTime: 2 * 60 * 1000,
   });
 
-  // ── Payment history (cached per student) ───────────────────────
+  // ── Payment history (cached per student) ────────────────────────
   const { data: paymentHistory = [], isLoading: historyLoading } = useQuery({
     queryKey: ["payments", selectedStudent?.id],
     queryFn:  () => API.get(`/payments/${selectedStudent.id}`).then(r => r.data),
@@ -68,7 +67,7 @@ function StudentList({ refresh, triggerRefresh }) {
     staleTime: 5 * 60 * 1000,
   });
 
-  // ── Helpers ────────────────────────────────────────────────────
+  // ── Helpers ─────────────────────────────────────────────────────
   const getStudentStatus = (datePaid, duration) => {
     if (!datePaid) return "Left";
     const paymentDate = new Date(datePaid);
@@ -76,8 +75,8 @@ function StudentList({ refresh, triggerRefresh }) {
     expiryDate.setMonth(expiryDate.getMonth() + Number(duration || 1));
     const today    = new Date();
     const diffDays = (today - expiryDate) / (1000 * 60 * 60 * 24);
-    if (diffDays < 0)              return "Active";
-    if (diffDays >= 0 && diffDays < 30) return "Expired";
+    if (diffDays < 0)                    return "Active";
+    if (diffDays >= 0 && diffDays < 30)  return "Expired";
     return "Left";
   };
 
@@ -97,7 +96,7 @@ function StudentList({ refresh, triggerRefresh }) {
 
   const openPaymentHistory = (student) => setSelectedStudent(student);
 
-  // ── Payment actions ────────────────────────────────────────────
+  // ── Payment actions ─────────────────────────────────────────────
   const updatePayment = async () => {
     try {
       await API.put(`/payments/${editPayment.id}`, editPayment);
@@ -113,9 +112,14 @@ function StudentList({ refresh, triggerRefresh }) {
   const deletePayment = async (id) => {
     try {
       await API.delete(`/payments/${id}`);
+      // Refresh the payment history panel immediately
       queryClient.invalidateQueries({ queryKey: ["payments", selectedStudent?.id] });
+      // Refresh the student list so balance/status updates
+      fetchStudents();
+      triggerRefresh();
     } catch (error) {
-      console.log("Delete failed:", error.response?.data || error);
+      alert(error.response?.data?.error || "Failed to delete payment.");
+      console.error("Delete failed:", error.response?.data || error);
     }
   };
 
@@ -130,7 +134,7 @@ function StudentList({ refresh, triggerRefresh }) {
     }
   };
 
-  // ── Filtering ──────────────────────────────────────────────────
+  // ── Filtering ────────────────────────────────────────────────────
   const filteredStudents = students.filter((s) => {
     const text          = search.toLowerCase();
     const studentStatus = getStudentStatus(s.payment?.date_paid, s.payment?.duration);
@@ -142,16 +146,16 @@ function StudentList({ refresh, triggerRefresh }) {
 
     return (
       matchesSearch &&
-      (statusFilter    === "All" || studentStatus === statusFilter) &&
-      (modeFilter      === "All" || s.mode        === modeFilter) &&
-      (levelFilter     === "All" || s.level       === levelFilter) &&
+      (statusFilter     === "All" || studentStatus === statusFilter) &&
+      (modeFilter       === "All" || s.mode        === modeFilter) &&
+      (levelFilter      === "All" || s.level       === levelFilter) &&
       (membershipFilter === "All" ||
         (membershipFilter === "Yes" && s.membership) ||
         (membershipFilter === "No"  && !s.membership))
     );
   });
 
-  // ── Render ─────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────
   return (
     <div>
       <h2>Students List</h2>
@@ -198,8 +202,8 @@ function StudentList({ refresh, triggerRefresh }) {
           onSuccess={(freshStudent) => {
             if (freshStudent) {
               queryClient.setQueryData(["students", refresh], (old) =>
-              old?.map((s) => s.id === freshStudent.id ? freshStudent : s) ?? old
-            );
+                old?.map((s) => s.id === freshStudent.id ? freshStudent : s) ?? old
+              );
             }
           }}
         />
