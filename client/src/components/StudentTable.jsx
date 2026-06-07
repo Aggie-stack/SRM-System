@@ -12,7 +12,6 @@ function StudentTable({
 }) {
   const [selected, setSelected] = useState(null);
 
-  // Show the Actions column if the user can manage students OR just view (admin/director)
   const showActionsCol = canManageStudents || canViewBalance;
 
   return (
@@ -26,7 +25,6 @@ function StudentTable({
             <th>Full Name</th>
             <th>Course</th>
             <th>Amount Paid (KSh)</th>
-            {canViewBalance && <th>Balance (KSh)</th>}
             <th>Mode of Study</th>
             <th>Level</th>
             <th>Status</th>
@@ -44,11 +42,6 @@ function StudentTable({
                 s.payment?.duration
               );
 
-              const displayBalance =
-                s.balance !== undefined && s.balance !== null
-                  ? s.balance
-                  : s.payment?.balance ?? 0;
-
               return (
                 <tr key={s.id} onClick={() => setSelected(s)}>
                   <td style={{ fontWeight: 600, color: "#2563eb", fontSize: 13 }}>
@@ -61,24 +54,9 @@ function StudentTable({
 
                   <td>
                     {s.payment?.amount_paid !== undefined
-                      ? s.payment.amount_paid
+                      ? Number(s.payment.amount_paid).toLocaleString()
                       : "—"}
                   </td>
-
-                  {canViewBalance && (
-                    <td>
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          color: displayBalance > 0 ? "#b45309" : "#15803d",
-                        }}
-                      >
-                        {displayBalance > 0
-                          ? displayBalance.toLocaleString()
-                          : "0"}
-                      </span>
-                    </td>
-                  )}
 
                   <td>
                     <span className={`badge ${s.mode}`}>{s.mode}</span>
@@ -112,8 +90,6 @@ function StudentTable({
                     )}
                   </td>
 
-                  {/* Actions column — shown to all roles, but ActionButtons
-                      only renders edit/delete when onEdit/onDelete are provided */}
                   {showActionsCol && (
                     <td onClick={(e) => e.stopPropagation()}>
                       <ActionButtons
@@ -131,9 +107,7 @@ function StudentTable({
             <tr>
               <td
                 colSpan={
-                  (showActionsCol ? 1 : 0) +
-                  (canViewBalance ? 1 : 0) +
-                  9
+                  (showActionsCol ? 1 : 0) + 9
                 }
                 className="no-results"
               >
@@ -144,7 +118,7 @@ function StudentTable({
         </tbody>
       </table>
 
-      {/* 📄 MODAL (DETAIL VIEW) */}
+      {/* MODAL (DETAIL VIEW) */}
       {selected && (
         <div className="modal-overlay" onClick={() => setSelected(null)}>
           <div className="student-modal" onClick={(e) => e.stopPropagation()}>
@@ -162,6 +136,7 @@ function StudentTable({
                 : "—"}
             </p>
 
+            {/* Balance only visible here in the modal */}
             {canViewBalance && (
               <p>
                 <strong>Balance (KSh):</strong>{" "}
