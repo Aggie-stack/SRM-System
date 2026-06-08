@@ -573,7 +573,7 @@ def apply_payment(invoice_id, amount, date_paid, method="cash", reference=None):
     invoice = Invoice.query.get(invoice_id)
     if not invoice:
         return {"error": "Invoice not found"}
-    if amount <= 0:
+    if amount < 0:
         return {"error": "Invalid amount"}
     payment_amount  = min(amount, invoice.balance)
     invoice.balance -= payment_amount
