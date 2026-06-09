@@ -118,10 +118,13 @@ function RenewalPayment({ onRenewalAdded }) {
       return;
     }
 
-    const canPayZero =
-      membership.membership && membership.membership_benefit === "free";
+    // ✅ Force amount_paid to "0" for free benefit before any validation
+    const isFree = membership.membership && membership.membership_benefit === "free";
+    const finalPayment = isFree
+      ? { ...payment, amount_paid: "0" }
+      : payment;
 
-    const amountPaid = Number(payment.amount_paid);
+    const amountPaid = Number(finalPayment.amount_paid);
 
     if (
       membership.membership_benefit === "50% discount" &&
@@ -134,17 +137,12 @@ function RenewalPayment({ onRenewalAdded }) {
     }
 
     if (
-      payment.amount_paid === "" ||
-      (!canPayZero && Number(payment.amount_paid) <= 0) ||
-      !payment.date_paid ||
-      !payment.duration
+      finalPayment.amount_paid === "" ||
+      (!isFree && amountPaid <= 0) ||
+      !finalPayment.date_paid ||
+      !finalPayment.duration
     ) {
       setError("Please fill in all payment fields.");
-      return;
-    }
-
-    if (membership.membership_benefit === "free" && amountPaid !== 0) {
-      setError("Free membership benefit requires payment of KSh 0.");
       return;
     }
 
@@ -166,12 +164,12 @@ function RenewalPayment({ onRenewalAdded }) {
 
       await API.post("/payments", {
         student_id: student.id,
-        amount_paid: Number(payment.amount_paid),
-        balance: Number(payment.balance || 0),
-        date_paid: payment.date_paid,
-        duration: Number(payment.duration),
-        method: payment.method,
-        reference: payment.reference,
+        amount_paid: amountPaid,                      // ✅ uses finalPayment's value (0 for free)
+        balance: Number(finalPayment.balance || 0),
+        date_paid: finalPayment.date_paid,
+        duration: Number(finalPayment.duration),
+        method: finalPayment.method,
+        reference: finalPayment.reference,
       });
 
       setSuccess(
@@ -297,7 +295,6 @@ function RenewalPayment({ onRenewalAdded }) {
               </div>
             )}
 
-            {/* ✅ Fixed: checkbox and label side by side */}
             <label style={{
               display: "flex",
               alignItems: "center",

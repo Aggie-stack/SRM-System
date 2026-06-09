@@ -23,25 +23,32 @@ function AddPayment({ onPaymentAdded }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Allow 0 (free students), but block empty or negative
+    if (amount === "" || amount === null || Number(amount) < 0) {
+      alert("Please enter a valid amount (0 or more).");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await API.post("/payments", {
-        student_id: studentId,
-        amount,
-        date_paid: datePaid,
+        student_id:  studentId,
+        amount_paid: Number(amount),   // send as number, avoids string/zero ambiguity
+        date_paid:   datePaid,
         duration,
       });
 
       const data = res.data;
 
       setReceipt({
-        receiptNo:       data?.renewal_no       || "N/A",
-        studentName:     data?.student_name     || "",
-        admissionNumber: data?.admission_number || "",
-        amount:          Number(data?.amount    || amount),
-        datePaid:        data?.date_paid        || datePaid,
-        duration:        data?.duration         || duration,
-        dueDate:         data?.due_date         || "",
+        receiptNo:       data?.renewal_no        || "N/A",
+        studentName:     data?.student_name      || "",
+        admissionNumber: data?.admission_number  || "",
+        amount:          data?.amount_paid ?? Number(amount),  // ?? so 0 is preserved
+        datePaid:        data?.date_paid         || datePaid,
+        duration:        data?.duration          || duration,
+        dueDate:         data?.due_date          || "",
         issuedAt:        new Date().toLocaleString(),
       });
 
@@ -266,8 +273,8 @@ function AddPayment({ onPaymentAdded }) {
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <button onClick={handlePrint}          style={{ flex: 1, background: "#18181b" }}>🖨️ Print</button>
-            <button onClick={handleDownload}       style={{ flex: 1, background: "#15803d" }}>⬇️ Download</button>
+            <button onClick={handlePrint}            style={{ flex: 1, background: "#18181b" }}>🖨️ Print</button>
+            <button onClick={handleDownload}         style={{ flex: 1, background: "#15803d" }}>⬇️ Download</button>
             <button onClick={() => setReceipt(null)} style={{ flex: 1, background: "#71717a" }}>New Payment</button>
           </div>
         </div>
@@ -303,7 +310,8 @@ function AddPayment({ onPaymentAdded }) {
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            required
+            min="0"
+            // no `required` — allows 0 for free students
           />
           <input
             type="date"

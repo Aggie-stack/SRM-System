@@ -452,7 +452,12 @@ def create_payment(data: dict):
     db.session.commit()
 
     if invoice:
-        apply_payment(invoice.id, amount, date_paid, method, reference)
+        if amount == 0 and invoice.balance == 0:
+            pass
+        elif amount == 0:
+            pass
+        else:
+            apply_payment(invoice.id, amount, date_paid, method, reference)
 
     student = db.session.get(Student, student_id)
 
@@ -490,6 +495,8 @@ def get_payments_by_student(student_id: int):
         "duration":         p.duration,
         "due_date":         p.due_date.isoformat() if p.due_date else None,
         "renewal_no":       p.renewal_no,
+        "method":           p.method,
+        "reference":        p.reference,
     } for p in payments]
 
 def delete_payment(payment_id: int):

@@ -54,7 +54,9 @@ function StudentTable({
 
                   <td>
                     {s.payment?.amount_paid !== undefined
-                      ? Number(s.payment.amount_paid).toLocaleString()
+                       ? s.membership_benefit === "free" && Number(s.payment.amount_paid) === 0
+                         ? <span style={{ color: "#16a34a", fontWeight: 700 }}>0 (Free)</span>
+                         : Number(s.payment.amount_paid).toLocaleString()
                       : "—"}
                   </td>
 
@@ -132,8 +134,10 @@ function StudentTable({
             <p>
               <strong>Amount Paid (KSh):</strong>{" "}
               {selected.payment?.amount_paid !== undefined
-                ? Number(selected.payment.amount_paid).toLocaleString()
-                : "—"}
+                ? selected.membership_benefit === "free" && Number(selected.payment.amount_paid) === 0
+                ? <span style={{ color: "#16a34a", fontWeight: 700 }}>0 (Free)</span>
+                : Number(selected.payment.amount_paid).toLocaleString()
+                : "-"}
             </p>
 
             {/* Balance only visible here in the modal */}
