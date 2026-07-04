@@ -483,7 +483,7 @@ def renewals_due():
     return jsonify(models.get_renewals_due()), 200
 
 
- with app.app_context():
+with app.app_context():
     init_db()
 # ─────────────────────────────────────────────
 # RUN
