@@ -483,15 +483,13 @@ def renewals_due():
     return jsonify(models.get_renewals_due()), 200
 
 
+ with app.app_context():
+    init_db()
 # ─────────────────────────────────────────────
 # RUN
 # ─────────────────────────────────────────────
-
-if __name__ == "__main__":
-    with app.app_context():
-        init_db()
     
-
+if __name__ == "__main__":
     socketio.run(
         app,
         host="0.0.0.0",
