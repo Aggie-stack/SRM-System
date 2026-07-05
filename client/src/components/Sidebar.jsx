@@ -39,8 +39,8 @@ function Sidebar({ darkMode, toggleTheme }) {
         <div className="sidebar-brand">
           <img src="/MainLogo.png" alt="RC" className="sidebar-logo" />
           <div className="sidebar-brand-text">
-            <span className="sidebar-school">Riseway</span>
-            <span className="sidebar-college">Training College</span>
+            <span className="sidebar-school">Brigh-stack</span>
+            <span className="sidebar-college">Technologies</span>
           </div>
         </div>
 

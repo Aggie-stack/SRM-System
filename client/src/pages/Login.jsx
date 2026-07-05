@@ -63,13 +63,13 @@ function Login() {
           <div className="login-logo-wrap">
             <img
               src="/MainLogo.png"
-              alt="Riseway Logo"
+              alt="Bright-stack Logo"
               className="login-logo"
             />
           </div>
 
-          <h1 className="brand-name">Riseway Training College</h1>
-          <p className="brand-tagline">"Your Future, Our Mission"</p>
+          <h1 className="brand-name">Bright-Stack Technologies</h1>
+          <p className="brand-tagline">"Innovation-Integrity-Excellence"</p>
 
           <div className="brand-divider" />
 
